@@ -8,7 +8,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from recipe.models import Ingredient, Recipe
-from recipe.serializers import RecipeSerializer, RecipeDetailSerializer
+from recipe.serializers import RecipeSerializer
 
 RECIPES_URL = reverse('recipe:recipe-list')
 
@@ -18,7 +18,7 @@ def detail_url(recipe_id):
 
 
 def sample_ingredient(name='Cinnamon'):
-    return Ingredient.objects.create(name=name)
+    return Ingredient.objects.create(name=name, recipe=sample_recipe())
 
 
 def sample_recipe(**params):
@@ -27,7 +27,7 @@ def sample_recipe(**params):
         'description': 'Sample description',
     }
     defaults.update(params)
-    return Recipe.objects.create(**defaults)
+    return Recipe.objects.create(name='Sample Name', description='sample description')
 
 
 class RecipeApiTests(TestCase):
@@ -36,8 +36,7 @@ class RecipeApiTests(TestCase):
         self.client = APIClient()
 
     def test_retrieve_recipes(self):
-        sample_recipe()
-        sample_recipe(name='A second sample recipe')
+        Recipe.objects.create(name='Sample Name', description='sample description')
 
         res = self.client.get(RECIPES_URL)
 
@@ -50,12 +49,14 @@ class RecipeApiTests(TestCase):
 
     def test_view_recipe_detail(self):
         recipe = sample_recipe()
-        recipe.ingredients.add(sample_ingredient())
+        ingredient1 = sample_ingredient(name='Cheese')
+        ingredient2 = sample_ingredient(name='milk')
 
         url = detail_url(recipe.id)
         res = self.client.get(url)
 
-        serializer = RecipeDetailSerializer(recipe)
+        serializer = RecipeSerializer(recipe)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data, serializer.data)
 
     def test_create_basic_recipe(self):
@@ -64,34 +65,35 @@ class RecipeApiTests(TestCase):
             'description': 'Cheese and chocolate, what more do you want?',
         }
 
-        res = self.client.post(RECIPES_URL, payload)
+        res = self.client.post(RECIPES_URL, payload, format='json')
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
-        recipe = Recipe.objecgit cts.get(id=res.data['id'])
-
+        recipe = Recipe.objects.get(id=res.data['id'])
         for key in payload.keys():
             self.assertEqual(payload[key], getattr(recipe, key))
 
     def test_create_recipe_with_ingredients(self):
-        ingredient1 = sample_ingredient(name='Prawns')
-        ingredient2 = sample_ingredient(name='Ginger')
+        ingredient1 = Ingredient(name='Prawns')
+        ingredient2 = Ingredient(name='Ginger')
         payload = {
             'name': 'Pad Thai',
-            'description': 'Some description',
-            'ingredients': [ingredient1.id, ingredient2.id]
+            'description': 'Thai deliciousness',
+            'ingredients': [
+                {'name': ingredient1.name},
+                {'name': ingredient2.name}
+            ]
         }
-        res = self.client.post(RECIPES_URL, payload)
+        res = self.client.post(RECIPES_URL, payload, format='json')
 
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
         recipe = Recipe.objects.get(id=res.data['id'])
         ingredients = recipe.ingredients.all()
         self.assertEqual(ingredients.count(), 2)
-        self.assertIn(ingredient1, ingredients)
-        self.assertIn(ingredient2, ingredients)
+        for ingredient in ingredients:
+            self.assertIn(ingredient.name, [ingredient1.name, ingredient2.name])
 
     def test_partial_update_recipe(self):
         recipe = sample_recipe()
-        new_ingredient = sample_ingredient(name='Orange')
-        payload = {'name': 'Chicken Tikka', 'ingredients': [new_ingredient.id]}
+        payload = {'name': 'Chicken Tikka', 'description': 'some new description'}
         url = detail_url(recipe.id)
 
         self.client.patch(url, payload)
@@ -99,20 +101,45 @@ class RecipeApiTests(TestCase):
         recipe.refresh_from_db()
 
         self.assertEqual(recipe.name, payload['name'])
+        self.assertEqual(recipe.description, payload['description'])
+
+    def test_add_ingredients_to_existing_recipe(self):
+        ingredient1 = Ingredient(name='Prawns')
+        ingredient2 = Ingredient(name='Ginger')
+        recipe = sample_recipe()
+        payload = {
+            'ingredients': [
+                {'name': ingredient1.name},
+                {'name': ingredient2.name}
+            ]
+        }
+        url = detail_url(recipe.id)
+
+        res = self.client.patch(url, payload, format='json')
+
+        recipe.refresh_from_db()
+
+        recipe = Recipe.objects.get(id=res.data['id'])
         ingredients = recipe.ingredients.all()
-        self.assertEqual(len(ingredients), 1)
-        self.assertIn(new_ingredient, ingredients)
+        print(recipe)
+        self.assertEqual(ingredients.count(), 2)
+        for ingredient in ingredients:
+            self.assertIn(ingredient.name, [ingredient1.name, ingredient2.name])
 
     def test_full_update_recipe(self):
+        ingredient1 = Ingredient(name='Prawns')
+        ingredient2 = Ingredient(name='Ginger')
         recipe = sample_recipe()
-        recipe.tags.add(sample_ingredient())
         payload = {
-            'title': 'Spaghetti Carbonara',
-            'description': 'Spag and meatballs'
+            'name': 'Spaghetti Carbonara',
+            'description': 'Spag and meatballs',
+            'ingredients': [
+                {'name': ingredient1.name},
+                {'name': ingredient2.name}
+            ]
         }
         url = detail_url(recipe.id)
         self.client.put(url, payload)
-
         recipe.refresh_from_db()
         self.assertEqual(recipe.name, payload['name'])
         self.assertEqual(recipe.description, payload['description'])

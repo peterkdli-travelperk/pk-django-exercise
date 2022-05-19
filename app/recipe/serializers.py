@@ -11,16 +11,42 @@ class IngredientSerializer(serializers.ModelSerializer):
 
 
 class RecipeSerializer(serializers.ModelSerializer):
-    ingredients = serializers.PrimaryKeyRelatedField(
-        many=True,
-        queryset=Ingredient.objects.all()
-    )
+    ingredients = IngredientSerializer(many=True, required=False)
 
     class Meta:
         model = Recipe
-        fields = ('id', 'name', 'ingredients')
+        fields = (
+            'id',
+            'name',
+            'description',
+            'ingredients'
+        )
         read_only_field = ('id',)
 
+    def create(self, validated_data):
+        ingredients = validated_data.pop('ingredients', [])
 
-class RecipeDetailSerializer(RecipeSerializer):
-    ingredients = IngredientSerializer(many=True, read_only=True)
+        recipe = Recipe.objects.create(**validated_data)
+
+        for ingredient in ingredients:
+            Ingredient.objects.create(name=ingredient['name'], recipe=recipe)
+
+        return recipe
+
+    def update(self, instance, validated_data):
+        instance.name = validated_data.get('name', instance.name)
+        instance.description = validated_data.get('description', instance.description)
+
+        ingredients = validated_data.get('ingredients', [])
+        for ingredient in ingredients:
+            ingredient_obj = Ingredient.objects.create(name=ingredient['name'], recipe=instance)
+            instance.ingredients.add(ingredient_obj)
+
+        instance.save()
+        return instance
+
+
+
+
+
+
