@@ -18,16 +18,16 @@ def detail_url(recipe_id):
 
 
 def sample_ingredient(name='Cinnamon'):
-    return Ingredient.objects.create(name=name, recipe=sample_recipe())
+    return Ingredient.objects.create(name=name, recipe=create_sample_recipe())
 
 
-def sample_recipe(**params):
+def create_sample_recipe(**params):
     defaults = {
         'name': 'Sample recipe',
         'description': 'Sample description',
     }
     defaults.update(params)
-    return Recipe.objects.create(name='Sample Name', description='sample description')
+    return Recipe.objects.create(**defaults)
 
 
 class RecipeApiTests(TestCase):
@@ -36,7 +36,9 @@ class RecipeApiTests(TestCase):
         self.client = APIClient()
 
     def test_retrieve_recipes(self):
-        Recipe.objects.create(name='Sample Name', description='sample description')
+        test_name = 'Pasta Bake'
+        test_description = 'Baked goodness'
+        create_sample_recipe(name=test_name, description=test_description)
 
         res = self.client.get(RECIPES_URL)
 
@@ -45,12 +47,13 @@ class RecipeApiTests(TestCase):
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(len(res.data), len(serializer.data))
+        self.assertEqual(len(res.data), 1)
         self.assertEqual(res.data, serializer.data)
+        self.assertEqual(res.data[0]['name'], test_name)
+        self.assertEqual(res.data[0]['description'], test_description)
 
     def test_view_recipe_detail(self):
-        recipe = sample_recipe()
-        ingredient1 = sample_ingredient(name='Cheese')
-        ingredient2 = sample_ingredient(name='milk')
+        recipe = create_sample_recipe()
 
         url = detail_url(recipe.id)
         res = self.client.get(url)
@@ -92,7 +95,7 @@ class RecipeApiTests(TestCase):
             self.assertIn(ingredient.name, [ingredient1.name, ingredient2.name])
 
     def test_partial_update_recipe(self):
-        recipe = sample_recipe()
+        recipe = create_sample_recipe()
         payload = {'name': 'Chicken Tikka', 'description': 'some new description'}
         url = detail_url(recipe.id)
 
@@ -106,7 +109,7 @@ class RecipeApiTests(TestCase):
     def test_add_ingredients_to_existing_recipe(self):
         ingredient1 = Ingredient(name='Prawns')
         ingredient2 = Ingredient(name='Ginger')
-        recipe = sample_recipe()
+        recipe = create_sample_recipe()
         payload = {
             'ingredients': [
                 {'name': ingredient1.name},
@@ -129,7 +132,7 @@ class RecipeApiTests(TestCase):
     def test_full_update_recipe(self):
         ingredient1 = Ingredient(name='Prawns')
         ingredient2 = Ingredient(name='Ginger')
-        recipe = sample_recipe()
+        recipe = create_sample_recipe()
         payload = {
             'name': 'Spaghetti Carbonara',
             'description': 'Spag and meatballs',

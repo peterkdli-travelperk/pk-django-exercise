@@ -6,7 +6,6 @@ from recipe import models
 class ModelTests(TestCase):
 
     def test_recipe_str(self):
-
         recipe = models.Recipe.objects.create(
             name='Steak and mushroom sauce',
             description='Meat and shrooms'
