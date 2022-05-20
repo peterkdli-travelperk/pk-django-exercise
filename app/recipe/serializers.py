@@ -7,7 +7,6 @@ class IngredientSerializer(serializers.ModelSerializer):
     class Meta:
         model = Ingredient
         fields = ('name',)
-        read_only_fields = ('id',)
 
 
 class RecipeSerializer(serializers.ModelSerializer):
@@ -37,18 +36,12 @@ class RecipeSerializer(serializers.ModelSerializer):
         instance.name = validated_data.get('name', instance.name)
         instance.description = validated_data.get('description', instance.description)
 
-        instance.ingredients.all().delete()
-
         ingredients = validated_data.get('ingredients', [])
+        if ingredients:
+            instance.ingredients.all().delete()
         for ingredient in ingredients:
             ingredient_obj = Ingredient.objects.create(name=ingredient['name'], recipe=instance)
             instance.ingredients.add(ingredient_obj)
 
         instance.save()
         return instance
-
-
-
-
-
-

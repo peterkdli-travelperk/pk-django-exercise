@@ -24,7 +24,7 @@ def sample_ingredient(name='Cinnamon'):
 def create_sample_recipe(**params):
     defaults = {
         'name': 'Sample recipe',
-        'description': 'Sample description',
+        'description': 'Sample description'
     }
     defaults.update(params)
     return Recipe.objects.create(**defaults)
@@ -62,6 +62,16 @@ class RecipeApiTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data, serializer.data)
 
+    def test_view_recipe_detail_invalid_id(self):
+        recipe = create_sample_recipe()
+
+        url = detail_url(recipe.id * 20)
+        res = self.client.get(url)
+
+        serializer = RecipeSerializer(recipe)
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+
     def test_create_basic_recipe(self):
         payload = {
             'name': 'Chocolate Cheesecake',
@@ -95,8 +105,17 @@ class RecipeApiTests(TestCase):
             self.assertIn(ingredient.name, [ingredient1.name, ingredient2.name])
 
     def test_partial_update_recipe(self):
+
+        ingredient_name = 'Prawns'
+        ingredient1 = Ingredient(name=ingredient_name)
+        ingredient2 = Ingredient(name='Ginger')
         recipe = create_sample_recipe()
-        payload = {'name': 'Chicken Tikka', 'description': 'some new description'}
+        recipe.ingredients.add(sample_ingredient(name=ingredient_name))
+
+        payload = {
+            'name': 'Chicken Tikka',
+            'description': 'some new description',
+        }
         url = detail_url(recipe.id)
 
         self.client.patch(url, payload)
@@ -105,11 +124,16 @@ class RecipeApiTests(TestCase):
 
         self.assertEqual(recipe.name, payload['name'])
         self.assertEqual(recipe.description, payload['description'])
+        self.assertEqual(recipe.ingredients.first().name, ingredient_name)
 
     def test_add_ingredients_to_existing_recipe(self):
+        test_name = 'Pasta Bake'
+        test_description = 'Baked goodness'
+        recipe = create_sample_recipe(name=test_name, description=test_description)
+
         ingredient1 = Ingredient(name='Prawns')
         ingredient2 = Ingredient(name='Ginger')
-        recipe = create_sample_recipe()
+
         payload = {
             'ingredients': [
                 {'name': ingredient1.name},
@@ -124,8 +148,9 @@ class RecipeApiTests(TestCase):
 
         recipe = Recipe.objects.get(id=res.data['id'])
         ingredients = recipe.ingredients.all()
-        print(recipe)
+
         self.assertEqual(ingredients.count(), 2)
+        self.assertEqual(recipe.name, test_name)
         for ingredient in ingredients:
             self.assertIn(ingredient.name, [ingredient1.name, ingredient2.name])
 
